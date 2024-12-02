@@ -111,7 +111,15 @@ ydl_opts = {
     'extract_flat': False,
     'force_generic_extractor': False,
     'cookiefile': 'cookies.txt',
-    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'extractor_args': {
+        'youtube': {
+            'skip_download': True,
+            'nocheckcertificate': True,
+            'no_warnings': True,
+            'quiet': True
+        }
+    }
 }
 
 @app.route('/')
