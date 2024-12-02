@@ -65,29 +65,49 @@ let player = {
     
     loadTrack: async function(track) {
         try {
-            console.log('Loading track with videoId:', track.videoId);
+            console.log('Loading track:', track);
+            
+            // Show loading state
+            this.showMessage('Loading track...');
+            
+            const response = await fetch(`/youtube/audio/${track.videoId}`);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Server error: ${response.status}`);
+            }
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            if (!data.audio_url) {
+                throw new Error('No audio URL received');
+            }
+            
+            // Clear any previous errors
+            this.clearError();
             
             // Reset audio element before loading new track
             this.audio.pause();
             this.audio.currentTime = 0;
             this.audio.src = '';
 
-            const response = await fetch(`/youtube/audio/${track.videoId}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            
+            // Set the audio source and load it
             this.audio.src = data.audio_url;
             this.audio.load();
+            
+            // Update track info
             this.currentTrack = track;
             this.updateTrackInfo(track);
+            
+            // Show success message
+            this.showMessage('Track loaded successfully');
+            
         } catch (error) {
             console.error('Error loading track:', error);
             this.showError(`Failed to load track: ${error.message}`);
+            throw error;
         }
     },
     
@@ -135,19 +155,41 @@ let player = {
     },
 
     showError: function(message) {
-        // Create error element if it doesn't exist
-        let errorElement = document.querySelector('.error-message');
-        if (!errorElement) {
-            errorElement = document.createElement('div');
-            errorElement.className = 'error-message';
-            document.querySelector('.player-container').appendChild(errorElement);
+        const messageElement = document.getElementById('player-message') || this.createMessageElement();
+        messageElement.textContent = message;
+        messageElement.style.color = '#f44336';
+        messageElement.style.display = 'block';
+    },
+    
+    showMessage: function(message) {
+        const messageElement = document.getElementById('player-message') || this.createMessageElement();
+        messageElement.textContent = message;
+        messageElement.style.color = '#4CAF50';
+        messageElement.style.display = 'block';
+        setTimeout(() => messageElement.style.display = 'none', 3000);
+    },
+    
+    clearError: function() {
+        const messageElement = document.getElementById('player-message');
+        if (messageElement) {
+            messageElement.style.display = 'none';
         }
-        
-        errorElement.textContent = message;
-        errorElement.classList.add('visible');
-        setTimeout(() => {
-            errorElement.classList.remove('visible');
-        }, 3000);
+    },
+    
+    createMessageElement: function() {
+        const messageElement = document.createElement('div');
+        messageElement.id = 'player-message';
+        messageElement.style.position = 'fixed';
+        messageElement.style.bottom = '20px';
+        messageElement.style.left = '50%';
+        messageElement.style.transform = 'translateX(-50%)';
+        messageElement.style.padding = '10px 20px';
+        messageElement.style.backgroundColor = '#333';
+        messageElement.style.color = '#fff';
+        messageElement.style.borderRadius = '5px';
+        messageElement.style.zIndex = '1000';
+        document.body.appendChild(messageElement);
+        return messageElement;
     }
 };
 

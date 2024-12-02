@@ -345,17 +345,56 @@ def youtube_search():
 @app.route('/youtube/audio/<video_id>')
 def get_audio_url(video_id):
     try:
+        print(f"Processing request for video ID: {video_id}")
+        
+        if not video_id:
+            return jsonify({'error': 'Video ID is required'}), 400
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            if 'url' in info:
-                return jsonify({'audio_url': info['url']})
-            elif 'formats' in info and len(info['formats']) > 0:
-                return jsonify({'audio_url': info['formats'][0]['url']})
-            else:
-                return jsonify({'error': 'No audio URL found'}), 404
+            try:
+                url = f'https://www.youtube.com/watch?v={video_id}'
+                print(f"Extracting info for URL: {url}")
+                info = ydl.extract_info(url, download=False)
+                
+                if not info:
+                    print("No info extracted")
+                    return jsonify({'error': 'Failed to extract video info'}), 500
+
+                # Try different ways to get the audio URL
+                audio_url = None
+                
+                # First try the direct URL
+                if 'url' in info:
+                    audio_url = info['url']
+                
+                # Then try formats
+                elif 'formats' in info:
+                    # Sort formats by quality
+                    formats = info['formats']
+                    audio_formats = [f for f in formats if f.get('acodec') != 'none']
+                    
+                    if audio_formats:
+                        # Get the best audio format
+                        audio_url = audio_formats[0]['url']
+
+                if audio_url:
+                    print("Successfully extracted audio URL")
+                    return jsonify({
+                        'audio_url': audio_url,
+                        'title': info.get('title', ''),
+                        'duration': info.get('duration', 0)
+                    })
+                else:
+                    print("No audio URL found in extracted info")
+                    return jsonify({'error': 'No audio URL found in video info'}), 500
+
+            except Exception as e:
+                print(f"Error during yt-dlp extraction: {str(e)}")
+                return jsonify({'error': f'YouTube extraction error: {str(e)}'}), 500
+
     except Exception as e:
-        print(f"Error extracting audio URL: {str(e)}")
-        return jsonify({'error': f'Failed to get audio URL: {str(e)}'}), 500
+        print(f"Server error: {str(e)}")
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/prepare_audio/<video_id>', methods=['POST'])
 def prepare_audio(video_id):
