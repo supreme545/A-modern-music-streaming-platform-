@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harmonic - Music Search</title>
+    <link rel="stylesheet" href="search.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div id="particles-js"></div>
+    
+    <div class="container">
+        <header>
+            <h1>Harmonic</h1>
+            <p>Search and Play Your Favorite Music</p>
+        </header>
+
+        <form id="search-form">
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Search for songs...">
+                <button type="submit" class="search-btn">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </form>
+
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+        </div>
+
+        <div id="results-container"></div>
+    </div>
+<!-- Player Modal -->
+    <div id="player-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <iframe id="player-frame" src="about:blank" frameborder="0"></iframe>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+
+
+
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="particles.config.js"></script>
+    <script src="search.js"></script>
+</body>
+</html>
