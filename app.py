@@ -103,6 +103,17 @@ def cleanup_old_cache():
             except Exception as e:
                 print(f"Error removing cache file: {e}")
 
+ydl_opts = {
+    'format': 'bestaudio/best',
+    'nocheckcertificate': True,
+    'no_warnings': True,
+    'quiet': True,
+    'extract_flat': False,
+    'force_generic_extractor': False,
+    'cookiefile': 'cookies.txt',
+    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -326,53 +337,17 @@ def youtube_search():
 @app.route('/youtube/audio/<video_id>')
 def get_audio_url(video_id):
     try:
-        print(f"Attempting to get audio URL for video ID: {video_id}")
-        
-        ydl_opts = {
-            'format': 'bestaudio/best',  # Get best audio quality
-            'quiet': True,
-            'no_warnings': True,
-            'extract_audio': True,
-            'youtube_include_dash_manifest': False,  # Skip DASH manifests
-            'nocheckcertificate': True,
-            'no_color': True
-        }
-
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            print("Extracting video info...")
-            url = f'https://www.youtube.com/watch?v={video_id}'
-            try:
-                info = ydl.extract_info(url, download=False)
-                if not info:
-                    raise ValueError("Failed to extract video info")
-                
-                # Get direct URL from the best format
-                audio_url = info.get('url')
-                if not audio_url and 'formats' in info:
-                    # Try to get URL from the first available format
-                    for format in info['formats']:
-                        if format.get('url'):
-                            audio_url = format['url']
-                            break
-                
-                if not audio_url:
-                    raise ValueError("No audio URL found")
-
-                print("Successfully extracted audio URL")
-                return jsonify({
-                    'audio_url': audio_url,
-                    'format': info.get('format_note', 'unknown'),
-                    'bitrate': info.get('abr', 0)
-                })
-                
-            except Exception as e:
-                print(f"Error during info extraction: {str(e)}")
-                raise ValueError(f"Failed to extract video info: {str(e)}")
-
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            if 'url' in info:
+                return jsonify({'audio_url': info['url']})
+            elif 'formats' in info and len(info['formats']) > 0:
+                return jsonify({'audio_url': info['formats'][0]['url']})
+            else:
+                return jsonify({'error': 'No audio URL found'}), 404
     except Exception as e:
-        error_msg = str(e)
-        print(f"Audio extraction error: {error_msg}")
-        return jsonify({'error': f'Failed to get audio URL: {error_msg}'}), 500
+        print(f"Error extracting audio URL: {str(e)}")
+        return jsonify({'error': f'Failed to get audio URL: {str(e)}'}), 500
 
 @app.route('/prepare_audio/<video_id>', methods=['POST'])
 def prepare_audio(video_id):
@@ -398,6 +373,7 @@ def prepare_audio(video_id):
 
         # Base yt-dlp options
         ydl_opts = {
+            'format': 'bestaudio/best',
             'quiet': True,
             'no_warnings': False,
             'extract_flat': True,

@@ -63,47 +63,31 @@ let player = {
         });
     },
     
-    loadTrack: async function(videoId) {
+    loadTrack: async function(track) {
         try {
-            console.log('Loading track with videoId:', videoId);
+            console.log('Loading track with videoId:', track.videoId);
             
             // Reset audio element before loading new track
             this.audio.pause();
             this.audio.currentTime = 0;
             this.audio.src = '';
 
-            const response = await fetch(`/youtube/audio/${videoId}`);
-            const data = await response.json();
-
+            const response = await fetch(`/youtube/audio/${track.videoId}`);
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to get audio URL');
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-
-            if (!data.audio_url) {
-                throw new Error('No audio URL received from server');
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
             }
-
-            console.log('Received audio data:', {
-                format: data.format,
-                bitrate: data.bitrate
-            });
-
-            // Set new source and play
-            this.audio.src = data.audio_url;
             
-            try {
-                await this.audio.play();
-                this.isPlaying = true;
-                document.querySelector('.play-pause-btn i').className = 'fas fa-pause';
-            } catch (playError) {
-                console.error('Error playing audio:', playError);
-                this.showError('Error playing audio. Please try again.');
-                throw playError;
-            }
+            this.audio.src = data.audio_url;
+            this.audio.load();
+            this.currentTrack = track;
+            this.updateTrackInfo(track);
         } catch (error) {
             console.error('Error loading track:', error);
-            this.showError(`Error loading track: ${error.message}`);
-            throw error;
+            this.showError(`Failed to load track: ${error.message}`);
         }
     },
     
@@ -176,7 +160,7 @@ window.addEventListener('message', async (event) => {
             case 'PLAY_SONG':
                 player.currentTrack = song;
                 player.updateTrackInfo(song);
-                await player.loadTrack(song.id);
+                await player.loadTrack(song);
                 break;
 
             case 'STOP_PLAYBACK':
@@ -218,6 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Start playing if we have a video ID
     if (videoId) {
-        player.loadTrack(videoId);
+        player.loadTrack({ videoId, title, thumbnail });
     }
 });
