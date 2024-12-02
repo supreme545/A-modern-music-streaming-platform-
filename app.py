@@ -9,6 +9,9 @@ from youtube_service import YouTubeService
 import time
 import random
 from urllib.parse import quote
+from urllib.parse import parse_qs
+import json
+from http.cookiejar import MozillaCookieJar
 
 # Get the absolute path to the current directory
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -117,46 +120,86 @@ def get_random_proxy():
 INNERTUBE_CLIENT = {
     'context': {
         'client': {
+            'hl': 'en',
+            'gl': 'US',
             'clientName': 'ANDROID',
-            'clientVersion': '17.31.35',
-            'androidSdkVersion': 30,
+            'clientVersion': '18.11.34',
+            'androidSdkVersion': 31,
+            'osName': 'Android',
+            'osVersion': '12',
+            'platform': 'MOBILE'
         },
     },
 }
 
-ydl_opts = {
-    'format': 'bestaudio/best',
-    'quiet': True,
-    'no_warnings': True,
-    'extract_flat': True,
-    'youtube_include_dash_manifest': False,
-    'nocheckcertificate': True,
-    'preferredcodec': 'mp3',
-    'user_agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
-    'http_headers': {
-        'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'Origin': 'https://www.youtube.com',
-        'Connection': 'keep-alive',
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
+]
+
+COOKIES_FILE = os.path.join(CURRENT_DIR, 'cookies.txt')
+
+def get_random_user_agent():
+    return random.choice(USER_AGENTS)
+
+def get_ydl_opts():
+    user_agent = get_random_user_agent()
+    return {
+        'format': 'bestaudio/best',
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'youtube_include_dash_manifest': False,
+        'nocheckcertificate': True,
+        'cookiefile': COOKIES_FILE,
+        'cookiesfrombrowser': ('chrome',),  # Try to get cookies from Chrome
+        'user_agent': user_agent,
+        'http_headers': {
+            'User-Agent': user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+        },
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],  # Try both Android and web clients
+                'player_skip': ['webpage', 'config', 'js'],  # Skip unnecessary downloads
+                'skip_webpage': True
+            }
+        }
     }
-}
 
 def get_video_info(video_id):
     try:
-        url = f'https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
+        url = f'https://www.youtube.com/youtubei/v1/player'
         headers = {
-            'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
+            'User-Agent': 'com.google.android.youtube/18.11.34 (Linux; U; Android 12) gzip',
             'Content-Type': 'application/json',
             'X-YouTube-Client-Name': '3',
-            'X-YouTube-Client-Version': '17.31.35'
+            'X-YouTube-Client-Version': '18.11.34',
+            'X-Goog-Api-Key': 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
         }
         data = {
             'videoId': video_id,
-            'context': INNERTUBE_CLIENT['context']
+            'context': INNERTUBE_CLIENT['context'],
+            'playbackContext': {
+                'contentPlaybackContext': {
+                    'html5Preference': 'HTML5_PREF_WANTS'
+                }
+            },
+            'contentCheckOk': True,
+            'racyCheckOk': True
         }
         response = requests.post(url, headers=headers, json=data)
+        if response.status_code != 200:
+            print(f"YouTube API error: Status {response.status_code}")
+            return None
+            
         return response.json()
     except Exception as e:
         print(f"Error getting video info: {e}")
@@ -318,13 +361,13 @@ def get_track_stream(track_id):
             )
             stream_response.raise_for_status()
             stream_data = stream_response.json()
-            
+
             if 'streams' in stream_data and len(stream_data['streams']) > 0:
                 return jsonify({
                     "streamUrl": stream_data['streams'][0]['url'],
                     "previewURL": track.get('previewURL')
                 })
-            
+
             # Fallback to preview URL if streaming is not available
             preview_url = track.get('previewURL')
             if preview_url:
@@ -332,7 +375,7 @@ def get_track_stream(track_id):
                     "streamUrl": f"https://listen.hs.llnwd.net/g3/prvw/4/{preview_url}",
                     "previewURL": preview_url
                 })
-            
+
             return jsonify({"error": "No stream available"}), 404
         
         return jsonify({"error": "Track not found"}), 404
@@ -390,43 +433,58 @@ def get_audio_url(video_id):
         if not video_id:
             return jsonify({'error': 'Video ID is required'}), 400
 
-        # First try using innertube client
-        video_info = get_video_info(video_id)
-        if video_info and 'streamingData' in video_info:
-            formats = video_info['streamingData'].get('adaptiveFormats', [])
-            audio_formats = [f for f in formats if f.get('mimeType', '').startswith('audio/')]
-            
-            if audio_formats:
-                # Sort by quality (bitrate)
-                audio_formats.sort(key=lambda x: int(x.get('bitrate', 0)), reverse=True)
-                best_audio = audio_formats[0]
-                
-                return jsonify({
-                    'audio_url': best_audio['url'],
-                    'title': video_info.get('videoDetails', {}).get('title', ''),
-                    'duration': int(video_info.get('videoDetails', {}).get('lengthSeconds', 0))
-                })
+        # Try multiple extraction methods
+        errors = []
+        
+        # Method 1: Try with default options
+        try:
+            with yt_dlp.YoutubeDL(get_ydl_opts()) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                if info and ('url' in info or 'formats' in info):
+                    audio_url = info.get('url')
+                    if not audio_url and 'formats' in info:
+                        formats = [f for f in info['formats'] if f.get('acodec') != 'none']
+                        if formats:
+                            formats.sort(key=lambda f: f.get('abr', 0), reverse=True)
+                            audio_url = formats[0]['url']
+                    
+                    if audio_url:
+                        return jsonify({
+                            'audio_url': audio_url,
+                            'title': info.get('title', ''),
+                            'duration': info.get('duration', 0)
+                        })
+        except Exception as e:
+            errors.append(f"Default extraction failed: {str(e)}")
 
-        # Fallback to yt-dlp if innertube fails
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+        # Method 2: Try with mobile client
+        try:
+            mobile_opts = get_ydl_opts()
+            mobile_opts['http_headers']['User-Agent'] = 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip'
             
-            if info and ('url' in info or 'formats' in info):
-                audio_url = info.get('url')
-                if not audio_url and 'formats' in info:
-                    formats = [f for f in info['formats'] if f.get('acodec') != 'none']
-                    if formats:
-                        formats.sort(key=lambda f: f.get('abr', 0), reverse=True)
-                        audio_url = formats[0]['url']
-                
-                if audio_url:
-                    return jsonify({
-                        'audio_url': audio_url,
-                        'title': info.get('title', ''),
-                        'duration': info.get('duration', 0)
-                    })
+            with yt_dlp.YoutubeDL(mobile_opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                if info and ('url' in info or 'formats' in info):
+                    audio_url = info.get('url')
+                    if not audio_url and 'formats' in info:
+                        formats = [f for f in info['formats'] if f.get('acodec') != 'none']
+                        if formats:
+                            formats.sort(key=lambda f: f.get('abr', 0), reverse=True)
+                            audio_url = formats[0]['url']
+                    
+                    if audio_url:
+                        return jsonify({
+                            'audio_url': audio_url,
+                            'title': info.get('title', ''),
+                            'duration': info.get('duration', 0)
+                        })
+        except Exception as e:
+            errors.append(f"Mobile extraction failed: {str(e)}")
 
-        return jsonify({'error': 'Could not extract audio URL'}), 500
+        # If all methods fail, return the error
+        error_message = ' | '.join(errors)
+        print(f"All extraction methods failed: {error_message}")
+        return jsonify({'error': f'Failed to extract audio: {error_message}'}), 500
 
     except Exception as e:
         print(f"Server error: {str(e)}")
@@ -455,24 +513,7 @@ def prepare_audio(video_id):
         cleanup_old_cache()
 
         # Base yt-dlp options
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True,
-            'youtube_include_dash_manifest': False,
-            'nocheckcertificate': True,
-            'preferredcodec': 'mp3',
-            'user_agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
-            'http_headers': {
-                'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Origin': 'https://www.youtube.com',
-                'Connection': 'keep-alive',
-            }
-        }
+        ydl_opts = get_ydl_opts()
 
         # First try to get the best pre-converted format
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

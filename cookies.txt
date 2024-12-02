@@ -2,4 +2,7 @@
 # https://curl.haxx.se/rfc/cookie_spec.html
 # This is a generated file!  Do not edit.
 
-.youtube.com	TRUE	/	TRUE	2147483647	CONSENT	YES+
+.youtube.com	TRUE	/	FALSE	1735689600	CONSENT	YES+cb.20231231-07-p0.en+FX+733
+.youtube.com	TRUE	/	TRUE	1735689600	VISITOR_INFO1_LIVE	2JpHpRxIZ3A
+.youtube.com	TRUE	/	TRUE	1735689600	GPS	1
+.youtube.com	TRUE	/	FALSE	1735689600	PREF	f6=40000000&hl=en&f5=30000
