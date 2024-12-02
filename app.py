@@ -111,13 +111,18 @@ ydl_opts = {
     'extract_flat': False,
     'force_generic_extractor': False,
     'cookiefile': 'cookies.txt',
-    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-us,en;q=0.5',
+        'Sec-Fetch-Mode': 'navigate'
+    },
     'extractor_args': {
         'youtube': {
-            'skip_download': True,
-            'nocheckcertificate': True,
-            'no_warnings': True,
-            'quiet': True
+            'player_client': ['android'],
+            'player_skip': ['webpage', 'config'],
+            'skip_webpage': True
         }
     }
 }
@@ -354,7 +359,22 @@ def get_audio_url(video_id):
             try:
                 url = f'https://www.youtube.com/watch?v={video_id}'
                 print(f"Extracting info for URL: {url}")
-                info = ydl.extract_info(url, download=False)
+                
+                # First try with android client
+                try:
+                    info = ydl.extract_info(url, download=False)
+                except Exception as e:
+                    print(f"First attempt failed, trying with different options: {str(e)}")
+                    # If first attempt fails, try with different options
+                    ydl.params.update({
+                        'extractor_args': {
+                            'youtube': {
+                                'player_client': ['web'],
+                                'skip_webpage': False
+                            }
+                        }
+                    })
+                    info = ydl.extract_info(url, download=False)
                 
                 if not info:
                     print("No info extracted")
@@ -369,12 +389,12 @@ def get_audio_url(video_id):
                 
                 # Then try formats
                 elif 'formats' in info:
-                    # Sort formats by quality
+                    # Sort formats by quality and prefer audio-only formats
                     formats = info['formats']
                     audio_formats = [f for f in formats if f.get('acodec') != 'none']
-                    
                     if audio_formats:
-                        # Get the best audio format
+                        # Sort by quality (assuming higher bitrate is better)
+                        audio_formats.sort(key=lambda f: f.get('abr', 0), reverse=True)
                         audio_url = audio_formats[0]['url']
 
                 if audio_url:
